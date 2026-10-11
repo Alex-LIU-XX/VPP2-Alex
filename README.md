@@ -22,11 +22,12 @@ Official implementation of **["Video Prediction Policy 2: Predict Better, Act Be
 We introduce **Video Prediction Policy 2 (VPP2)**, a world-action model (WAM) with
 strong zero-shot generalization in both video prediction and action generation.
 
-Our pipeline has three stages:
+Our pipeline has three stages: (1) **event-level video pretraining**, (2) **single-step visual planning through post-training and distillation**, and (3) **action learning with a mixture-of-transformers (MoT) architecture**.
 
-1. **Event-level video pretraining.** Continue pretraining the base video model on a large, diverse dataset of manipulation videos with detailed captions to improve generalization across open-ended tasks.
-2. **Single-step visual planning.** Post-train and distill the video model into a single-step visual planner with a fixed prediction horizon.
-3. **Action learning.** Add an action module through a mixture-of-transformers (MoT) architecture to learn an implicit inverse dynamics model.
+This codebase includes:
+
+- **[Zero-shot video prediction](docs/video_prediction.md).** Generate videos from an initial image and a text instruction using the **Stage-1 (49 frames)** or **Stage-2 (17 frames)** video model, with input preparation, prompt enhancement, and ready-to-run examples.
+- **Policy post-training on [RoboDojo](docs/robodojo.md) and [LIBERO](docs/libero.md).** Training configurations and scripts for adapting VPP2 to both benchmarks, together with policy evaluation workflows. For RoboDojo, we add **history frames to the model input** to support tasks that require memory. To accommodate this architecture change, we start post-training from the **Stage-2 video model before distillation**.
 
 <p align="center">
   <a href="assets/teaser.png"><img src="assets/teaser.png" alt="VPP2 paper overview: event-level video prediction, instruction following, and robot policy learning." width="100%"></a>
