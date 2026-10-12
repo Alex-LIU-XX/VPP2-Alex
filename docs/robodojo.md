@@ -1,7 +1,9 @@
 # RoboDojo: joint Action2B training and testing
 
-The training recipe starts from **RoboDojo history-conditioned Video-10k** and
-trains joint Video + a freshly initialized Action2B for 100,000 steps.
+The policy recipe starts from **RoboDojo history-conditioned Video-10k** and
+trains joint Video + a freshly initialized Action2B for 100,000 steps. You can
+also [train Video-10k from the released Stage-2 video model](#train-video-10k)
+using the same prepared RoboDojo data.
 
 The published inference checkpoint is **joint Video + Action2B step 100,000**, evaluated with
 **shift 1, 10 Euler steps, seed 1, horizon 32 / execute 24, history 8 / stride 25**.
@@ -20,6 +22,7 @@ Set `PYTHON_BIN` when the policy interpreter is not the current `python`.
 | `scripts/robodojo/convert.sh` | Convert the public EE16 LeRobot v3 export to native-frame episodes |
 | `scripts/robodojo/prepare.sh` | Validate converted EE16 data, fixed split and critical sampling index |
 | `scripts/robodojo/text_cache.sh` | Cache language embeddings |
+| `scripts/robodojo/train_video.sh` | Train history-conditioned Video-10k from Stage-2 Video |
 | `scripts/robodojo/init_action.sh` | Initialize the fresh Action2B expert |
 | `scripts/robodojo/install_adapter.sh` | Copy the VPP2 adapter into RoboDojo/XPolicyLab |
 | `scripts/robodojo/train.sh` | Continuous joint 0–100k using `configs/robodojo/train_100k.yaml` |
@@ -119,9 +122,8 @@ and [ModelScope](https://modelscope.cn/models/haodong123/VPP2), revision `master
 |---|---|---|
 | RoboDojo history-conditioned Video-10k | `checkpoints/initialization/robodojo_his10k.pt` | `weights/checkpoints/initialization/robodojo_his10k.pt` |
 
-Use `weights/checkpoints/initialization/robodojo_his10k.pt` as `VPP2_VIDEO_INIT`.
-The robot-video pretrained backbone checkpoint is a planned release; see the
-[TODO list](../README.md#todo).
+Use `weights/checkpoints/initialization/robodojo_his10k.pt` as `VPP2_VIDEO_INIT`,
+or train your own with the [optional video stage](#train-video-10k).
 
 For training, download Video-10k together with the shared Wan encoders:
 
@@ -178,6 +180,64 @@ COMMON_ARGS=(
 `convert` builds the episode files; `prepare` retains 3466 training and 34 held-out
 episodes and builds the critical sampling index. Text caching uses a GPU; inspect
 live GPU processes and tmux before launching it. Initialization is a large CPU operation.
+
+<a id="train-video-10k"></a>
+
+### Optional: train history-conditioned Video-10k
+
+Start from the released **VPP2 Stage-2 Video (17 frames)** checkpoint. This is
+the upstream initialization used for the history-conditioned Video-10k recipe.
+Reuse `convert.sh`, `prepare.sh` and `text_cache.sh` above; action initialization
+is needed only after this video stage.
+
+The video stage uses `all.csv` (all 3,500 demonstrations), matching the original
+Video-10k run. The subsequent joint stage uses the existing `train.csv` / `val.csv`
+split of 3,466 / 34 episodes.
+
+```bash
+hf download Haodong082399/VPP2 --local-dir weights \
+  --include 'config.json' \
+  --include 'checkpoints_video/vpp2-video-stage2-17f.pth' \
+  --include 'checkpoints/Wan2.1-I2V-14B-480P/**'
+
+export VPP2_STAGE2_VIDEO="$PWD/weights/checkpoints_video/vpp2-video-stage2-17f.pth"
+bash scripts/robodojo/train_video.sh \
+  "paths.wan=$VPP2_WAN_ROOT" "paths.video_init=$VPP2_STAGE2_VIDEO" \
+  "paths.data=$VPP2_PREPARED" "paths.media=$VPP2_MEDIA_ROOT" \
+  output_dir=runs/robodojo_video_10k
+```
+
+Set the distributed launcher variables as in the joint stage below and retain
+**global batch 832**. The self-contained
+[`train_video_10k.yaml`](../configs/robodojo/train_video_10k.yaml) trains the full
+Video DiT for **10,000 steps**, with frozen VAE, CLIP and text encoder. It uses
+AdamW, LR `5e-6`, 200-step warmup, cosine decay to `5e-8`, and video flow-matching
+noise sampled with shift 3. No action expert is constructed.
+
+Each window contains the episode's first image, seven past observations, the
+current observation, and sixteen future frames: 25 RGB frames / 7 video latents.
+The first 9 RGB frames provide the clean history condition. History is sampled
+around stride 25; future frames use stride 4 at native 25 Hz. Images are resized
+directly to 240×416. Video attention remains bidirectional. Sampling balances
+tasks without the joint stage's critical-frame weighting. Video loss includes
+valid history-prefix and future latents; fully padded latent groups are masked.
+
+Use the resulting checkpoint directly for joint initialization:
+
+```bash
+export VPP2_VIDEO_INIT="$PWD/runs/robodojo_video_10k/checkpoints/weights/step_010000.pt"
+export VPP2_ACTION_INIT="$PWD/weights/init/action2b_from_trained_video10k.pt"
+bash scripts/robodojo/init_action.sh --video "$VPP2_VIDEO_INIT" --output "$VPP2_ACTION_INIT"
+COMMON_ARGS=(
+  "paths.wan=$VPP2_WAN_ROOT" "paths.video_init=$VPP2_VIDEO_INIT"
+  "paths.action_init=$VPP2_ACTION_INIT" "paths.data=$VPP2_PREPARED"
+  "paths.media=$VPP2_MEDIA_ROOT"
+)
+```
+
+Video weights are saved every 2,000 steps and at completion. Full optimizer and
+sampler state is saved alongside them; resume with
+`resume=runs/robodojo_video_10k/checkpoints/state/step_008000`.
 
 ## 3. Train joint 0–100k
 

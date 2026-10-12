@@ -114,6 +114,7 @@ complete assets and normalization files:
 
 - [Zero-shot video prediction](docs/video_prediction.md)
 - [RoboDojo: training and testing](docs/robodojo.md)
+- [RoboDojo Video-10k training from Stage-2 Video](docs/robodojo.md#train-video-10k)
 - [LIBERO, LIBERO-OOD and LIBERO-PRO](docs/libero.md)
 
 ## Citation

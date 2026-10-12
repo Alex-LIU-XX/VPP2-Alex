@@ -362,7 +362,12 @@ def run_training(cfg: DictConfig):
             raise ValueError(f"Unsupported evaluation kind: {evaluation_kind}")
 
     with profiler.measure_startup("trainer_init_total_ms", cuda=True):
-        trainer = JointTrainer(
+        trainer_type = JointTrainer
+        if cfg.train_mode == "video_only":
+            from .video_training import trainer_class
+
+            trainer_type = trainer_class()
+        trainer = trainer_type(
             cfg=cfg,
             model=model,
             train_dataset=train_ds,

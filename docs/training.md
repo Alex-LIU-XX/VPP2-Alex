@@ -12,11 +12,12 @@ consistent path variables and complete commands. This document expands the train
 | converted full-episode metadata + videos + EE16 parquet files | 3500 source demonstrations |
 | `configs/robodojo/normalization_ee16.json` | exact statistics from all 3500 episodes |
 
-The release provides RoboDojo history-conditioned Video-10k.
-Start joint + Action2B directly from Video-10k;
-[download it and follow the integrated scripts](robodojo.md) for one continuous
-0–100k run. The robot-video pretrained backbone checkpoint is on the
-[TODO list](../README.md#todo). The converter below builds the training data from the public RoboDojo export.
+The release provides RoboDojo history-conditioned Video-10k. You can also
+[train Video-10k from the released Stage-2 Video checkpoint](robodojo.md#train-video-10k)
+with `scripts/robodojo/train_video.sh` and `configs/robodojo/train_video_10k.yaml`
+(global batch 832, 10,000 steps). Both routes feed the same joint + Action2B
+[0–100k training recipe](robodojo.md#3-train-joint-0100k).
+The converter below builds the training data from the public RoboDojo export.
 
 The converter accepts the official, shift-fixed **EE16 LeRobot v3.0** export.
 Joint14, LeRobot v2.1 and raw XPolicyLab HDF5 are not inputs to this recipe.
